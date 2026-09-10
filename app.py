@@ -1,6 +1,4 @@
 import os
-import random
-import string
 import subprocess
 import threading
 import requests
@@ -9,157 +7,72 @@ from flask import Flask, render_template_string
 
 app = Flask(__name__)
 
-# ==============================
-# CLOUDFLARE CONFIG
-# ==============================
+# ==========================================
+# VERCEL CLOUDFLARE API
+# ==========================================
 
-CF_API_TOKEN = os.getenv("C_TOKEN")
-
-CF_ZONE_ID = "83c49b52d6ffe95c9615f424ece7c2e9"
-
-DOMAIN = "co08.art"
-
-# ==============================
-# RANDOM SUBDOMAIN
-# ==============================
-
-def random_subdomain():
-    # Example:
-    # ip-17-29-05-yy-6yy
-
-    a = random.randint(10, 99)
-    b = random.randint(10, 99)
-    c = random.randint(10, 99)
-
-    letters = ''.join(
-        random.choices(string.ascii_lowercase, k=2)
-    )
-
-    number = random.randint(100, 999)
-
-    return f"ip-{a}-{b}-{c}-{letters}-{number}"
+VERCEL_API = "https://co08-cloudflare-api.vercel.app/api/create-domain"
 
 
-# ==============================
-# RAILWAY URL
-# ==============================
+# ==========================================
+# GET RAILWAY PUBLIC URL
+# ==========================================
 
 def get_railway_url():
 
-    # Railway normally provides RAILWAY_PUBLIC_DOMAIN
-    railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
 
-    if railway_domain:
-        return f"https://{railway_domain}"
+    if domain:
+        return "https://" + domain
 
-    # Fallback
-    railway_static = os.getenv("RAILWAY_STATIC_URL")
+    static_url = os.getenv("RAILWAY_STATIC_URL")
 
-    if railway_static:
-        if railway_static.startswith("http"):
-            return railway_static
+    if static_url:
+        if static_url.startswith("http"):
+            return static_url
 
-        return f"https://{railway_static}"
+        return "https://" + static_url
 
-    # Manual fallback
-    return "http://localhost:8080"
+    return ""
 
 
-# ==============================
-# CLOUDFLARE DNS
-# ==============================
+# ==========================================
+# CREATE CLOUDFLARE DOMAIN
+# ==========================================
 
-def create_cloudflare_record(subdomain, target):
+def create_domain():
 
-    if not CF_API_TOKEN:
-        print("ERROR: C_TOKEN is not set.")
-        return False
+    railway_url = get_railway_url()
 
-    url = (
-        f"https://api.cloudflare.com/client/v4/"
-        f"zones/{CF_ZONE_ID}/dns_records"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {CF_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    full_domain = f"{subdomain}.{DOMAIN}"
-
-    data = {
-        "type": "CNAME",
-        "name": full_domain,
-        "content": target.replace("https://", "").replace("http://", "").rstrip("/"),
-        "ttl": 1,
-        "proxied": False
-    }
+    if not railway_url:
+        return {
+            "success": False,
+            "error": "Railway public domain not detected"
+        }
 
     try:
 
         response = requests.post(
-            url,
-            headers=headers,
-            json=data,
-            timeout=20
+            VERCEL_API,
+            json={
+                "target": railway_url
+            },
+            timeout=30
         )
 
-        result = response.json()
-
-        if result.get("success"):
-            print(f"[+] DNS CREATED: {full_domain}")
-            print(f"[+] TARGET: {target}")
-
-            return True
-
-        print("[!] Cloudflare error:")
-        print(result)
-
-        return False
+        return response.json()
 
     except Exception as e:
 
-        print("[!] Cloudflare request failed:")
-        print(e)
-
-        return False
-
-
-# ==============================
-# CREATE DOMAIN
-# ==============================
-
-def setup_domain():
-
-    railway_url = get_railway_url()
-
-    print("=" * 50)
-    print("R-BOTS DOMAIN SYSTEM")
-    print("=" * 50)
-
-    print(f"Railway URL: {railway_url}")
-
-    if not CF_API_TOKEN:
-        print("C_TOKEN is missing.")
-        return "C_TOKEN not configured"
-
-    for _ in range(10):
-
-        subdomain = random_subdomain()
-
-        if create_cloudflare_record(
-            subdomain,
-            railway_url
-        ):
-
-            return f"https://{subdomain}.{DOMAIN}"
-
-    return "Failed to create Cloudflare domain"
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
-# ==============================
+# ==========================================
 # HTML
-# ==============================
+# ==========================================
 
 HTML = """
 <!DOCTYPE html>
@@ -173,67 +86,114 @@ HTML = """
 <meta name="viewport"
 content="width=device-width,initial-scale=1">
 
-<title>R-BOTS SSH</title>
+<title>R-BOTS SSH ACCESS</title>
 
 <style>
 
+* {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
-    background: #0b0b0b;
-    color: white;
-    font-family: Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #080808;
+    color: #fff;
+
+    font-family: Arial, sans-serif;
 }
 
 .card {
-    width: 90%;
-    max-width: 550px;
+
+    width: 92%;
+    max-width: 560px;
+
     background: #151515;
-    padding: 30px;
+
+    border: 1px solid #292929;
+
     border-radius: 18px;
-    box-shadow: 0 0 30px #000;
+
+    padding: 30px;
+
     text-align: center;
+
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
 }
 
-h1 {
+.title {
+
+    font-size: 24px;
+    font-weight: bold;
+
     margin-bottom: 25px;
 }
 
 .domain {
-    background: #080808;
-    padding: 15px;
+
+    background: #090909;
+
+    border: 1px solid #292929;
+
     border-radius: 10px;
+
+    padding: 15px;
+
     word-break: break-all;
+
     margin-bottom: 15px;
-    font-size: 16px;
+
+    font-size: 15px;
 }
 
 button {
+
     width: 100%;
-    padding: 13px;
+
     border: 0;
+
     border-radius: 10px;
-    cursor: pointer;
-    font-size: 16px;
+
+    padding: 14px;
+
+    background: #fff;
+
+    color: #000;
+
+    font-size: 15px;
+
     font-weight: bold;
+
+    cursor: pointer;
 }
 
-.copy {
-    background: white;
-    color: black;
-}
+button:active {
 
-.copy:hover {
-    opacity: .85;
+    transform: scale(.98);
 }
 
 .status {
-    margin-top: 20px;
-    color: #aaa;
+
+    margin-top: 18px;
+
+    color: #999;
+
     font-size: 14px;
+}
+
+.error {
+
+    color: #ff5f5f;
+}
+
+.success {
+
+    color: #5cff9d;
 }
 
 </style>
@@ -244,37 +204,39 @@ button {
 
 <div class="card">
 
-<h1>R-BOTS SSH ACCESS</h1>
+<div class="title">
+R-BOTS SSH ACCESS
+</div>
 
 <div class="domain" id="domain">
 {{ domain }}
 </div>
 
-<button class="copy"
-onclick="copyDomain()">
-
+<button onclick="copyDomain()">
 COPY DOMAIN
-
 </button>
 
-<div class="status" id="status">
-Cloudflare DNS Connected
+<div class="status {{ status_class }}" id="status">
+{{ status }}
 </div>
 
 </div>
+
 
 <script>
 
 function copyDomain() {
 
     const domain =
-        document.getElementById("domain").innerText;
+        document.getElementById("domain").innerText.trim();
 
     navigator.clipboard.writeText(domain);
 
     document.getElementById("status").innerText =
         "✓ Domain copied";
 
+    document.getElementById("status").className =
+        "status success";
 }
 
 </script>
@@ -285,31 +247,62 @@ function copyDomain() {
 """
 
 
-# ==============================
-# ROUTE
-# ==============================
+# ==========================================
+# HOME
+# ==========================================
 
 @app.route("/")
 def home():
 
-    domain = setup_domain()
+    result = create_domain()
+
+    if result.get("success"):
+
+        domain = result.get(
+            "url",
+            result.get("domain", "Domain created")
+        )
+
+        status = "✓ Cloudflare domain created"
+
+        status_class = "success"
+
+    else:
+
+        domain = "Failed to create Cloudflare domain"
+
+        status = result.get(
+            "error",
+            "Unknown error"
+        )
+
+        status_class = "error"
 
     return render_template_string(
         HTML,
-        domain=domain
+        domain=domain,
+        status=status,
+        status_class=status_class
     )
 
 
-# ==============================
-# START TTYD
-# ==============================
+# ==========================================
+# TTYD
+# ==========================================
 
 def start_ttyd():
 
     port = os.getenv("PORT", "8080")
 
-    username = os.getenv("USERNAME", "root")
-    password = os.getenv("PASSWORD", "root")
+    username = os.getenv(
+        "USERNAME",
+        "root"
+    )
+
+    password = os.getenv(
+        "PASSWORD",
+        "root"
+    )
 
     command = [
         "/bin/ttyd",
@@ -321,14 +314,16 @@ def start_ttyd():
         "/bin/bash"
     ]
 
-    print(f"[+] Starting ttyd on port {port}")
+    print(
+        f"[+] Starting ttyd on port {port}"
+    )
 
     subprocess.Popen(command)
 
 
-# ==============================
-# MAIN
-# ==============================
+# ==========================================
+# START
+# ==========================================
 
 if __name__ == "__main__":
 
@@ -337,9 +332,13 @@ if __name__ == "__main__":
         daemon=True
     ).start()
 
-    port = int(os.getenv("PORT", "8080"))
+    port = int(
+        os.getenv("PORT", "8080")
+    )
 
-    print(f"[+] Web server starting on {port}")
+    print("=" * 45)
+    print("R-BOTS SSH ACCESS")
+    print("=" * 45)
 
     app.run(
         host="0.0.0.0",
